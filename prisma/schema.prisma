@@ -1,0 +1,427 @@
+// MoneyFlow Pro - Complete Database Schema
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Auth Models ────────────────────────────────────────────
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  password      String?
+  image         String?
+  currency      String    @default("INR")
+  theme         String    @default("system")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  authAccounts  AuthAccount[]
+  sessions      Session[]
+  accounts      FinancialAccount[]
+  transactions  Transaction[]
+  categories    Category[]
+  people        Person[]
+  loans         Loan[]
+  emis          EMI[]
+  budgets       Budget[]
+  goals         Goal[]
+  recurring     RecurringTransaction[]
+  notifications Notification[]
+  settlements   Settlement[]
+}
+
+model AuthAccount {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+  @@map("auth_accounts")
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+// ─── Financial Accounts ─────────────────────────────────────
+model FinancialAccount {
+  id             String   @id @default(cuid())
+  userId         String
+  name           String
+  type           AccountType
+  openingBalance Float    @default(0)
+  currentBalance Float    @default(0)
+  color          String   @default("#3B82F6")
+  icon           String   @default("wallet")
+  isDefault      Boolean  @default(false)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([userId])
+  @@map("financial_accounts")
+}
+
+enum AccountType {
+  CASH
+  BANK
+  UPI
+  WALLET
+  CREDIT_CARD
+  SAVINGS_ACCOUNT
+  OTHER
+}
+
+// ─── Transactions ───────────────────────────────────────────
+model Transaction {
+  id            String          @id @default(cuid())
+  userId        String
+  accountId     String?
+  categoryId    String?
+  personId      String?
+  loanId        String?
+  emiId         String?
+  goalId        String?
+  type          TransactionType
+  amount        Float
+  date          DateTime
+  description   String?
+  notes         String?
+  paymentMethod String?
+  tags          String[]
+  isRecurring   Boolean         @default(false)
+  recurringId   String?
+  attachmentUrl String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account   FinancialAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  category  Category?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  person    Person?           @relation(fields: [personId], references: [id], onDelete: SetNull)
+  loan      Loan?             @relation(fields: [loanId], references: [id], onDelete: SetNull)
+  emi       EMI?              @relation(fields: [emiId], references: [id], onDelete: SetNull)
+  goal      Goal?             @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  recurring RecurringTransaction? @relation(fields: [recurringId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([userId, date])
+  @@index([userId, type])
+  @@index([userId, categoryId])
+  @@index([userId, personId])
+  @@index([userId, accountId])
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+  EMI
+  LOAN_RECEIVED
+  LOAN_PAYMENT
+  LENT
+  LENT_RETURN
+  BORROWED
+  BORROWED_RETURN
+  FAMILY
+  FRIEND
+  TRANSFER
+  SAVING
+  INVESTMENT
+  OTHER
+}
+
+// ─── Categories ─────────────────────────────────────────────
+model Category {
+  id        String       @id @default(cuid())
+  userId    String?
+  name      String
+  type      CategoryType
+  icon      String?
+  color     String?
+  isDefault Boolean      @default(false)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([userId])
+}
+
+enum CategoryType {
+  INCOME
+  EXPENSE
+}
+
+// ─── People ─────────────────────────────────────────────────
+model Person {
+  id           String        @id @default(cuid())
+  userId       String
+  name         String
+  phone        String?
+  email        String?
+  relationship Relationship?
+  notes        String?
+  photoUrl     String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  loans        Loan[]
+  settlements  Settlement[]
+
+  @@index([userId])
+}
+
+enum Relationship {
+  FATHER
+  MOTHER
+  BROTHER
+  SISTER
+  SPOUSE
+  CHILD
+  FRIEND
+  COLLEAGUE
+  RELATIVE
+  OTHER
+}
+
+// ─── Loans ──────────────────────────────────────────────────
+model Loan {
+  id               String   @id @default(cuid())
+  userId           String
+  personId         String?
+  name             String
+  type             LoanType
+  lender           String?
+  principal        Float
+  interestRate     Float    @default(0)
+  startDate        DateTime
+  tenure           Int?      // months
+  emiAmount        Float?
+  dueDate          Int?      // day of month
+  totalPayable     Float?
+  totalPaid        Float    @default(0)
+  remainingAmount  Float
+  status           LoanStatus @default(ACTIVE)
+  notes            String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  person       Person?       @relation(fields: [personId], references: [id], onDelete: SetNull)
+  emis         EMI[]
+  transactions Transaction[]
+
+  @@index([userId])
+  @@index([userId, status])
+}
+
+enum LoanType {
+  PERSONAL
+  BANK
+  VEHICLE
+  EDUCATION
+  HOME
+  OTHER
+}
+
+enum LoanStatus {
+  ACTIVE
+  COMPLETED
+  DEFAULTED
+}
+
+// ─── EMI ────────────────────────────────────────────────────
+model EMI {
+  id                 String    @id @default(cuid())
+  userId             String
+  loanId             String
+  emiNumber          Int
+  amount             Float
+  principalComponent Float?
+  interestComponent  Float?
+  dueDate            DateTime
+  paidDate           DateTime?
+  status             EMIStatus @default(UPCOMING)
+  notes              String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  loan         Loan          @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([userId])
+  @@index([userId, dueDate])
+  @@index([userId, status])
+}
+
+enum EMIStatus {
+  PAID
+  UPCOMING
+  DUE_SOON
+  OVERDUE
+}
+
+// ─── Budgets ────────────────────────────────────────────────
+model Budget {
+  id         String   @id @default(cuid())
+  userId     String
+  name       String
+  category   String
+  amount     Float
+  spent      Float    @default(0)
+  month      Int
+  year       Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category, month, year])
+  @@index([userId])
+  @@index([userId, month, year])
+}
+
+// ─── Goals ──────────────────────────────────────────────────
+model Goal {
+  id          String     @id @default(cuid())
+  userId      String
+  name        String
+  targetAmount Float
+  savedAmount  Float     @default(0)
+  targetDate   DateTime?
+  icon         String?
+  color        String?
+  status       GoalStatus @default(IN_PROGRESS)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([userId])
+}
+
+enum GoalStatus {
+  IN_PROGRESS
+  COMPLETED
+  PAUSED
+}
+
+// ─── Recurring Transactions ─────────────────────────────────
+model RecurringTransaction {
+  id            String         @id @default(cuid())
+  userId        String
+  type          TransactionType
+  amount        Float
+  description   String
+  categoryId    String?
+  accountId     String?
+  frequency     Frequency
+  interval      Int            @default(1)
+  startDate     DateTime
+  endDate       DateTime?
+  nextDueDate   DateTime
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([userId])
+  @@index([userId, nextDueDate])
+}
+
+enum Frequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+  CUSTOM
+}
+
+// ─── Notifications ──────────────────────────────────────────
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      NotificationType
+  isRead    Boolean          @default(false)
+  link      String?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, isRead])
+}
+
+enum NotificationType {
+  EMI_DUE
+  LOAN_PAYMENT
+  BUDGET_WARNING
+  BUDGET_EXCEEDED
+  OVERDUE_PAYMENT
+  OVERDUE_RECEIVABLE
+  RECURRING
+  GENERAL
+}
+
+// ─── Settlements ────────────────────────────────────────────
+model Settlement {
+  id        String   @id @default(cuid())
+  userId    String
+  personId  String
+  amount    Float
+  date      DateTime
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, personId])
+}
