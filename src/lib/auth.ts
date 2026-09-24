@@ -8,6 +8,8 @@ import { loginSchema } from "@/lib/validations";
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: PrismaAdapter(prisma) as never,
   session: { strategy: "jwt" },
+  trustHost: true,
+  secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "dev-secret-change-in-production-abc123xyz",
   pages: {
     signIn: "/login",
   },

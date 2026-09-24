@@ -14,20 +14,28 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const session = await auth();
-  const isLoggedIn = !!session?.user;
+  try {
+    const session = await auth();
+    const isLoggedIn = !!session?.user;
 
-  // Redirect logged-in users away from auth pages
-  if (isLoggedIn && isPublicRoute) {
-    return NextResponse.redirect(new URL("/", request.url));
+    // Redirect logged-in users away from auth pages
+    if (isLoggedIn && isPublicRoute) {
+      return NextResponse.redirect(new URL("/", request.url));
+    }
+
+    // Redirect non-logged-in users to login
+    if (!isLoggedIn && !isPublicRoute) {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+
+    return NextResponse.next();
+  } catch (error) {
+    console.error("Auth middleware error:", error);
+    if (!isPublicRoute) {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+    return NextResponse.next();
   }
-
-  // Redirect non-logged-in users to login
-  if (!isLoggedIn && !isPublicRoute) {
-    return NextResponse.redirect(new URL("/login", request.url));
-  }
-
-  return NextResponse.next();
 }
 
 export const config = {
